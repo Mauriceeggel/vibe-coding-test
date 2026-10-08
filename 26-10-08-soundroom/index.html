@@ -93,7 +93,7 @@ button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--acc
     </select>
   </label>
   <label class="vol" for="ghost-count">
-    Presences&nbsp;<input type="range" id="ghost-count" min="0" max="10" value="0"><span class="val" id="ghost-val">0</span>
+    Empty shells&nbsp;<input type="range" id="ghost-count" min="0" max="10" value="0"><span class="val" id="ghost-val">0</span>
   </label>
   <label class="vol" for="vol">Volume&nbsp;<input type="range" id="vol" min="0" max="100" value="70"></label>
   <span id="status">connecting…</span>
@@ -186,7 +186,7 @@ const FIREBASE_CONFIG = {
   }
 
   function makeVoice(freq, self) {
-    const tm = self ? (TIMBRES[timbre]||TIMBRES.tone) : TIMBRES.tone;
+    const tm = TIMBRES[timbre] || TIMBRES.tone;
     const t  = ctx.currentTime;
     const o1 = ctx.createOscillator(); o1.type=tm.t1; o1.frequency.value=freq;
     const o2 = ctx.createOscillator(); o2.type=tm.t2; o2.frequency.value=freq*tm.r2;
@@ -453,7 +453,9 @@ const FIREBASE_CONFIG = {
   document.getElementById("blind").addEventListener("click",e=>{blind=!blind;e.currentTarget.setAttribute("aria-pressed",String(blind));});
   document.getElementById("timbre").addEventListener("change",e=>{
     timbre=e.target.value;
-    if(selfVoice){selfVoice.stop();selfVoice=null;}  // recreated on next frame
+    // Recreate all local voices so the new timbre applies to every presence
+    if(selfVoice){selfVoice.stop();selfVoice=null;}
+    for(const o of others.values()){if(o.voice){o.voice.stop();o.voice=null;}}
   });
   document.getElementById("ghost-count").addEventListener("input",e=>{
     autoGhostDone=true;
