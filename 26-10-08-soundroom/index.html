@@ -54,8 +54,11 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
 .vol{display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:.78rem; color:var(--muted);
   background:color-mix(in srgb, var(--surface) 88%, transparent); border:1px solid var(--line); border-radius:999px; padding:7px 14px; backdrop-filter:blur(6px)}
 .vol input{accent-color:var(--accent); width:110px}
+#status{font-family:var(--font-mono); font-size:.72rem; color:var(--muted); padding:6px 14px;
+  background:color-mix(in srgb, var(--surface) 88%, transparent); border:1px solid var(--line);
+  border-radius:999px; backdrop-filter:blur(6px); pointer-events:none}
+#status.live{color:var(--accent)}
 </style>
-
 </head>
 <body>
 
@@ -72,9 +75,28 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
   <button id="blind" aria-pressed="false">Blind mode</button>
   <button id="ghosts" aria-pressed="false">Simulated presences</button>
   <label class="vol" for="vol">Volume <input type="range" id="vol" min="0" max="100" value="70"></label>
+  <span id="status">connecting…</span>
 </div>
 
+<!-- Firebase Realtime Database — https://console.firebase.google.com -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
 <script>
+// ─────────────────────────────────────────────────────────────────────────────
+//  FIREBASE CONFIG — remplace les valeurs ci-dessous avec ton propre projet :
+//  1. Crée un projet sur https://console.firebase.google.com
+//  2. Build → Realtime Database → Create database (mode test, région la plus proche)
+//  3. ⚙ Project settings → Your apps → </> → copie firebaseConfig
+// ─────────────────────────────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:      "AIzaSyCCWkiKr4vz5-XXXXXXXXXXXXXXXXX",
+  authDomain:  "soundroom-XXXXX.firebaseapp.com",
+  databaseURL: "https://soundroom-XXXXX-default-rtdb.firebaseio.com",
+  projectId:   "soundroom-XXXXX",
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 (() => {
   // ---------- Music ----------
   const SCALE = [0, 2, 4, 7, 9];                  // G pentatonic: G A B D E
@@ -90,7 +112,7 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
   const me = { x: 0.5, y: 0.45, pulse: 0 };
   const others = new Map();     // peer -> {x,y,dx,dy,pulse,hue,ghost,idle,voice}
   const ripples = [];
-  let room = null, blind = false, ghostsOn = false, audioOn = false, muted = false;
+  let blind = false, ghostsOn = false, audioOn = false, muted = false;
   let loneSince = performance.now(), autoGhostDone = false;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -165,10 +187,9 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
 
   let selfVoice = null;
   function listen(o) {
-    // gain, pan and brightness of a presence heard from my listening point
     const dx = o.dx - me.x, dy = o.dy - me.y, d = Math.hypot(dx * 1.4, dy);
     const near = Math.max(0, 1 - d / 0.9);
-    const gain = (0.018 + 0.2 * near * near) * (o.idle ? 0.4 : 1);   // never fully silent
+    const gain = (0.018 + 0.2 * near * near) * (o.idle ? 0.4 : 1);
     return { d, gain, pan: dx * 1.8, cut: 380 + 4200 * near * near };
   }
 
@@ -192,7 +213,6 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
       const k = o.ph;
       o.x = 0.5 + 0.38 * Math.sin(t * 0.07 + k) * Math.cos(t * 0.031 + k * 2);
       o.y = 0.5 + 0.36 * Math.sin(t * 0.053 + k * 3);
-      // a simulated presence sometimes answers when you are close
       const near = Math.hypot(o.x - me.x, o.y - me.y) < 0.25;
       if (now > o.nextPulse) {
         o.pulse++; o.nextPulse = now + (near ? 2500 : 7000) + Math.random() * 6000;
@@ -200,7 +220,7 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
     }
   }
 
-  // ---------- Shared room ----------
+  // ---------- Peers ----------
   function validNum(v) { return typeof v === "number" && isFinite(v); }
   function syncPeers(peers) {
     const seen = new Set();
@@ -227,17 +247,72 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
   }
   function realCount() { let n = 0; for (const o of others.values()) if (!o.ghost) n++; return n; }
 
-  async function connect() {
-    if (!window.claude || !window.claude.use) return;
-    try { room = await window.claude.use("room"); } catch (e) { room = null; }
-    if (!room) return;
-    room.onPeers(ch => syncPeers(ch.peers), () => {});
-    pushPresence();
-  }
+  // ---------- Firebase real-time room ----------
+  const MY_PEER_ID = Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+  const ROOM = "soundroom-v1";
+  let db = null;
+  let pushTimer = null;
+  const statusEl = document.getElementById("status");
+
   function pushPresence() {
-    if (!room) return;
-    room.presence({ x: +me.x.toFixed(4), y: +me.y.toFixed(4), pulse: me.pulse }).catch(() => {});
+    if (!db) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => {
+      db.ref(`${ROOM}/peers/${MY_PEER_ID}`).set({
+        x: +me.x.toFixed(4),
+        y: +me.y.toFixed(4),
+        pulse: me.pulse,
+        t: firebase.database.ServerValue.TIMESTAMP
+      }).catch(() => {});
+    }, 80); // throttle: ~12 updates/sec max
   }
+
+  function connect() {
+    const cfg = FIREBASE_CONFIG;
+    const configured = cfg.apiKey && !cfg.apiKey.includes("XXXXXXXXX") && cfg.databaseURL && !cfg.databaseURL.includes("XXXXX");
+    if (!configured) {
+      statusEl.textContent = "local only — configure Firebase to play online";
+      return;
+    }
+    try {
+      const app = firebase.initializeApp(cfg);
+      db = firebase.database(app);
+
+      // Auto-remove this peer if the connection drops
+      db.ref(`${ROOM}/peers/${MY_PEER_ID}`).onDisconnect().remove();
+
+      // Listen for all peers in the room
+      db.ref(`${ROOM}/peers`).on("value", snap => {
+        const data = snap.val() || {};
+        const peers = Object.entries(data)
+          .filter(([id]) => id !== MY_PEER_ID)
+          .map(([peer, pr]) => ({
+            peer,
+            presence: { x: pr.x, y: pr.y, pulse: pr.pulse },
+            sameTab: false,
+            updatedAt: pr.t || Date.now()
+          }));
+        syncPeers(peers);
+        const n = peers.length;
+        statusEl.textContent = n === 0 ? "alone in the room" : `${n + 1} in the room`;
+        statusEl.className = n > 0 ? "live" : "";
+      }, err => {
+        statusEl.textContent = "connection error — check Firebase config";
+        console.error("Firebase error:", err);
+      });
+
+      pushPresence();
+    } catch (e) {
+      db = null;
+      statusEl.textContent = "Firebase init failed — check config";
+      console.error("Firebase init:", e.message);
+    }
+  }
+
+  // Clean up presence when the page closes
+  window.addEventListener("pagehide", () => {
+    if (db) db.ref(`${ROOM}/peers/${MY_PEER_ID}`).remove().catch(() => {});
+  });
 
   // ---------- Gestures ----------
   const stage = document.getElementById("stage");
@@ -335,7 +410,6 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
 
   function draw(now) {
     g.clearRect(0, 0, W, H);
-    // staff: one line per note of the scale
     const myBand = bandOf(me.y);
     for (let b = 0; b < BANDS; b++) {
       const y = (1 - (b + 0.5) / BANDS) * H;
@@ -345,7 +419,6 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
     }
     g.globalAlpha = 1;
 
-    // ripples
     for (let i = ripples.length - 1; i >= 0; i--) {
       const r = ripples[i], age = (now - r.t) / 2200;
       if (age > 1) { ripples.splice(i, 1); continue; }
@@ -358,7 +431,6 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
     }
     g.globalAlpha = 1;
 
-    // listening links: solid when the interval is consonant, dashed otherwise
     if (!blind) {
       for (const o of others.values()) {
         const l = listen(o);
@@ -372,7 +444,6 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
       }
       g.globalAlpha = 1;
 
-      // presences
       for (const o of others.values()) {
         const l = listen(o), x = o.dx * W, y = o.dy * H;
         const breath = reduced ? 0 : Math.sin(now / 900 + o.hue) * 2;
@@ -389,7 +460,6 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
       g.globalAlpha = 1;
     }
 
-    // me
     const mx = me.x * W, my = me.y * H, br = reduced ? 0 : Math.sin(now / 700) * 2;
     g.strokeStyle = tok.accent; g.lineWidth = 1.5;
     g.beginPath(); g.arc(mx, my, 16 + br, 0, Math.PI * 2); g.stroke();
@@ -401,7 +471,6 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
   function frame(now) {
     if (ghostsOn) moveGhosts(now);
     for (const o of others.values()) {
-      // smooth received movements
       o.dx += (o.x - o.dx) * 0.18; o.dy += (o.y - o.dy) * 0.18;
       if (o.ghost && o.lastPulse !== o.pulse) { if (o.lastPulse !== undefined) firePulse(o); o.lastPulse = o.pulse; }
     }
@@ -418,7 +487,6 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
 
     draw(now);
 
-    // alone for a while? bring in simulated presences
     if (realCount() > 0) loneSince = now;
     if (!autoGhostDone && !ghostsOn && now - loneSince > 5000) { autoGhostDone = true; setGhosts(true); }
 
