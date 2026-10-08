@@ -8,18 +8,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=JetBrains+Mono:wght@400&display=swap">
 <style>
-/* Layout: the sound field fills the whole window; controls float along the bottom edge. */
 :root{
-  --bg:#e3e7ee;
-  --surface:#f8f9fb;
-  --ink:#16192a;
-  --muted:#5a6075;
-  --line:#c9cfdb;
-  --accent:#8a5a00;
-  --accent-soft:#f1e3c4;
-  --dot-l:42%;
-  --font-display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --font-mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --bg:#e3e7ee; --surface:#f8f9fb; --ink:#16192a; --muted:#5a6075;
+  --line:#c9cfdb; --accent:#8a5a00; --accent-soft:#f1e3c4; --dot-l:42%;
+  --font-display:"Bricolage Grotesque","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -40,22 +33,36 @@ body{background:var(--bg); color:var(--ink); font-family:var(--font-display)}
 .stage:focus-visible{box-shadow:inset 0 0 0 3px var(--accent)}
 canvas{display:block; width:100%; height:100%}
 
-.gate{position:absolute; inset:0; display:grid; place-items:center; background:color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter:blur(2px); padding:16px}
+.gate{position:absolute; inset:0; display:grid; place-items:center;
+  background:color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter:blur(2px); padding:16px}
+.gate-inner{display:flex; flex-direction:column; align-items:center; gap:14px}
+.gate-inner input[type=text]{
+  font:var(--font-mono); font-size:.92rem; padding:10px 20px;
+  border:1px solid var(--line); border-radius:999px;
+  background:color-mix(in srgb, var(--surface) 90%, transparent);
+  color:var(--ink); text-align:center; width:210px; backdrop-filter:blur(6px);
+}
+.gate-inner input[type=text]::placeholder{color:var(--muted)}
+.gate-inner input[type=text]:focus{outline:2px solid var(--accent); outline-offset:2px; border-color:var(--accent)}
 
-.controls{position:fixed; left:0; right:0; bottom:0; display:flex; flex-wrap:wrap; justify-content:center; gap:10px; align-items:center;
-  padding:12px 16px calc(14px + env(safe-area-inset-bottom, 0px)); pointer-events:none}
+.controls{position:fixed; left:0; right:0; bottom:0; display:flex; flex-wrap:wrap;
+  justify-content:center; gap:10px; align-items:center;
+  padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px)); pointer-events:none}
 .controls > *{pointer-events:auto}
-button{font:inherit; font-weight:600; font-size:.92rem; border-radius:999px; padding:9px 18px; border:1px solid var(--line);
-  background:color-mix(in srgb, var(--surface) 88%, transparent); color:var(--ink); cursor:pointer; backdrop-filter:blur(6px)}
+button{font:inherit; font-weight:600; font-size:.92rem; border-radius:999px; padding:9px 18px;
+  border:1px solid var(--line); background:color-mix(in srgb,var(--surface) 88%,transparent);
+  color:var(--ink); cursor:pointer; backdrop-filter:blur(6px)}
 button:hover{border-color:var(--accent)}
 button:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 button.primary{background:var(--accent); color:var(--bg); border-color:var(--accent); font-size:1.1rem; padding:14px 28px}
 button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
 .vol{display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:.78rem; color:var(--muted);
-  background:color-mix(in srgb, var(--surface) 88%, transparent); border:1px solid var(--line); border-radius:999px; padding:7px 14px; backdrop-filter:blur(6px)}
-.vol input{accent-color:var(--accent); width:110px}
+  background:color-mix(in srgb,var(--surface) 88%,transparent); border:1px solid var(--line);
+  border-radius:999px; padding:7px 14px; backdrop-filter:blur(6px)}
+.vol input[type=range]{accent-color:var(--accent); width:80px}
+.vol .val{min-width:1.4ch; text-align:right}
 #status{font-family:var(--font-mono); font-size:.72rem; color:var(--muted); padding:6px 14px;
-  background:color-mix(in srgb, var(--surface) 88%, transparent); border:1px solid var(--line);
+  background:color-mix(in srgb,var(--surface) 88%,transparent); border:1px solid var(--line);
   border-radius:999px; backdrop-filter:blur(6px); pointer-events:none}
 #status.live{color:var(--accent)}
 </style>
@@ -65,7 +72,10 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
 <div class="stage" id="stage" tabindex="0" aria-label="Sound field. Move your listening point with the mouse, a finger or the arrow keys. Press Space to send a signal.">
   <canvas id="cv"></canvas>
   <div class="gate" id="gate">
-    <button class="primary" id="enter">Enter the room</button>
+    <div class="gate-inner">
+      <input type="text" id="nameInput" placeholder="Your name (optional)" maxlength="10" autocomplete="off" spellcheck="false">
+      <button class="primary" id="enter">Enter the room</button>
+    </div>
   </div>
 </div>
 
@@ -73,8 +83,10 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
   <button id="mute" aria-pressed="false">Mute</button>
   <button id="pulse">Send a signal</button>
   <button id="blind" aria-pressed="false">Blind mode</button>
-  <button id="ghosts" aria-pressed="false">Simulated presences</button>
-  <label class="vol" for="vol">Volume <input type="range" id="vol" min="0" max="100" value="70"></label>
+  <label class="vol" for="ghost-count">
+    Presences&nbsp;<input type="range" id="ghost-count" min="0" max="10" value="0"><span class="val" id="ghost-val">0</span>
+  </label>
+  <label class="vol" for="vol">Volume&nbsp;<input type="range" id="vol" min="0" max="100" value="70"></label>
   <span id="status">connecting…</span>
 </div>
 
@@ -83,12 +95,7 @@ button[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--ac
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
 <script>
-// ─────────────────────────────────────────────────────────────────────────────
-//  FIREBASE CONFIG — remplace les valeurs ci-dessous avec ton propre projet :
-//  1. Crée un projet sur https://console.firebase.google.com
-//  2. Build → Realtime Database → Create database (mode test, région la plus proche)
-//  3. ⚙ Project settings → Your apps → </> → copie firebaseConfig
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Firebase config ──────────────────────────────────────────────────────────
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyBRBVKFWJQUuRbbEpFQQsUakYUcaiXB1VE",
   authDomain:        "vibe-724ae.firebaseapp.com",
@@ -102,18 +109,27 @@ const FIREBASE_CONFIG = {
 
 (() => {
   // ---------- Music ----------
-  const SCALE = [0, 2, 4, 7, 9];                  // G pentatonic: G A B D E
-  const BANDS = 10;                                // two octaves
-  const BASE = 196;                                // G3, in Hz
+  const SCALE = [0, 2, 4, 7, 9];   // G pentatonic
+  const BANDS = 10;
+  const BASE  = 196;                // G3 Hz
   const CONSONANT = new Set([0, 5, 7, 3, 4, 9, 8]);
 
-  const bandOf = y => Math.max(0, Math.min(BANDS - 1, Math.floor((1 - y) * BANDS)));
-  const semis = b => SCALE[b % 5] + 12 * Math.floor(b / 5);
-  const freqOf = b => BASE * Math.pow(2, semis(b) / 12);
+  const bandOf   = y => Math.max(0, Math.min(BANDS - 1, Math.floor((1 - y) * BANDS)));
+  const semis    = b => SCALE[b % 5] + 12 * Math.floor(b / 5);
+  const freqOf   = b => BASE * Math.pow(2, semis(b) / 12);
+
+  // Frequency with subtle detune based on exact y position within a band.
+  // At the band's center line → exact pitch; at edges → ±20 cents.
+  function freqWithDetune(y) {
+    const cont  = (1 - y) * BANDS;
+    const band  = Math.max(0, Math.min(BANDS - 1, Math.floor(cont)));
+    const dist  = cont - band - 0.5;  // -0.5..+0.5 (0 = center of band)
+    return freqOf(band) * Math.pow(2, dist * 40 / 1200);
+  }
 
   // ---------- State ----------
-  const me = { x: 0.5, y: 0.45, pulse: 0 };
-  const others = new Map();     // peer -> {x,y,dx,dy,pulse,hue,ghost,idle,voice}
+  const me = { x: 0.5, y: 0.45, pulse: 0, name: "" };
+  const others = new Map();
   const ripples = [];
   let blind = false, ghostsOn = false, audioOn = false, muted = false;
   let loneSince = performance.now(), autoGhostDone = false;
@@ -130,24 +146,38 @@ const FIREBASE_CONFIG = {
     comp.threshold.value = -18; comp.ratio.value = 4;
     master = ctx.createGain(); master.gain.value = vol();
     master.connect(comp).connect(ctx.destination);
+
     dry = ctx.createGain(); dry.gain.value = 0.8; dry.connect(master);
+
     const conv = ctx.createConvolver();
     const len = ctx.sampleRate * 2.8, ir = ctx.createBuffer(2, len, ctx.sampleRate);
-    for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+    }
     conv.buffer = ir;
-    wet = ctx.createGain(); wet.gain.value = 0.45;
+    // Wet starts at 0 (center position = fully dry); updated dynamically by x.
+    wet = ctx.createGain(); wet.gain.value = 0;
     wet.connect(conv).connect(master);
   }
   function vol() { return (document.getElementById("vol").value / 100) * 0.9; }
+
+  // Apply wet/dry mix from current x position (center=dry, edges=wet).
+  function applyReverb() {
+    if (!audioOn || !dry) return;
+    const wetness = Math.abs(me.x - 0.5) * 2;           // 0..1
+    dry.gain.setTargetAtTime(0.8 * (1 - wetness),        ctx.currentTime, 0.15);
+    wet.gain.setTargetAtTime(0.8 * wetness,              ctx.currentTime, 0.15);
+  }
 
   function makeVoice(freq, self) {
     const t = ctx.currentTime;
     const o1 = ctx.createOscillator(); o1.type = "sine"; o1.frequency.value = freq;
     const o2 = ctx.createOscillator(); o2.type = "triangle"; o2.frequency.value = freq * 2.004;
     const g2 = ctx.createGain(); g2.gain.value = self ? 0.12 : 0.22;
-    const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 900; f.Q.value = 0.6;
+    const f  = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 900; f.Q.value = 0.6;
     const trem = ctx.createGain(); trem.gain.value = 0.75;
-    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.12 + Math.random() * 0.22;
+    const lfo  = ctx.createOscillator(); lfo.frequency.value = 0.12 + Math.random() * 0.22;
     const lfoG = ctx.createGain(); lfoG.gain.value = 0.25;
     lfo.connect(lfoG).connect(trem.gain);
     const amp = ctx.createGain(); amp.gain.value = 0;
@@ -196,29 +226,44 @@ const FIREBASE_CONFIG = {
     return { d, gain, pan: dx * 1.8, cut: 380 + 4200 * near * near };
   }
 
-  // ---------- Simulated presences ----------
-  const ghostSeeds = [{ id: "g1", hue: 190 }, { id: "g2", hue: 320 }, { id: "g3", hue: 120 }];
-  function setGhosts(on) {
-    ghostsOn = on;
-    document.getElementById("ghosts").setAttribute("aria-pressed", String(on));
-    if (on) {
-      ghostSeeds.forEach((g, i) => {
-        if (!others.has(g.id)) others.set(g.id, { x: .2 + .3 * i, y: .3 + .2 * i, dx: .2 + .3 * i, dy: .3 + .2 * i, pulse: 0, hue: g.hue, ghost: true, ph: Math.random() * 10, nextPulse: performance.now() + 3000 + Math.random() * 6000 });
-      });
-    } else {
-      ghostSeeds.forEach(g => { const o = others.get(g.id); if (o) { o.voice && o.voice.stop(); others.delete(g.id); } });
+  // ---------- Simulated presences (up to 10) ----------
+  const ghostSeeds = [
+    { id:"g1",  hue:190 }, { id:"g2",  hue:320 }, { id:"g3",  hue:120 },
+    { id:"g4",  hue: 40 }, { id:"g5",  hue:270 }, { id:"g6",  hue: 60 },
+    { id:"g7",  hue:160 }, { id:"g8",  hue:350 }, { id:"g9",  hue:220 },
+    { id:"g10", hue: 90 },
+  ];
+
+  function setGhosts(count) {
+    ghostsOn = count > 0;
+    for (let i = 0; i < ghostSeeds.length; i++) {
+      const g = ghostSeeds[i];
+      if (i < count) {
+        if (!others.has(g.id)) {
+          others.set(g.id, {
+            x: .2 + .3*(i%3), y: .3 + .2*Math.floor(i/3),
+            dx:.2 + .3*(i%3), dy:.3 + .2*Math.floor(i/3),
+            pulse:0, hue:g.hue, ghost:true, name:"",
+            ph: Math.random()*10, nextPulse: performance.now()+3000+Math.random()*6000
+          });
+        }
+      } else {
+        const o = others.get(g.id);
+        if (o) { o.voice && o.voice.stop(); others.delete(g.id); }
+      }
     }
   }
+
   function moveGhosts(now) {
     const t = now / 1000;
     for (const o of others.values()) {
       if (!o.ghost) continue;
       const k = o.ph;
-      o.x = 0.5 + 0.38 * Math.sin(t * 0.07 + k) * Math.cos(t * 0.031 + k * 2);
-      o.y = 0.5 + 0.36 * Math.sin(t * 0.053 + k * 3);
+      o.x = 0.5 + 0.38 * Math.sin(t*0.07+k) * Math.cos(t*0.031+k*2);
+      o.y = 0.5 + 0.36 * Math.sin(t*0.053+k*3);
       const near = Math.hypot(o.x - me.x, o.y - me.y) < 0.25;
       if (now > o.nextPulse) {
-        o.pulse++; o.nextPulse = now + (near ? 2500 : 7000) + Math.random() * 6000;
+        o.pulse++; o.nextPulse = now + (near ? 2500 : 7000) + Math.random()*6000;
       }
     }
   }
@@ -236,11 +281,11 @@ const FIREBASE_CONFIG = {
       const x = Math.max(0, Math.min(1, pr.x)), y = Math.max(0, Math.min(1, pr.y));
       const pulse = validNum(pr.pulse) ? pr.pulse : 0;
       if (!o) {
-        o = { x, y, dx: x, dy: y, pulse, hue: hash(p.peer) % 360, ghost: false };
+        o = { x, y, dx:x, dy:y, pulse, hue:hash(p.peer)%360, ghost:false, name:pr.name||"" };
         others.set(p.peer, o);
       } else {
         if (pulse > o.pulse) { o.pulse = pulse; firePulse(o); }
-        o.x = x; o.y = y;
+        o.x = x; o.y = y; o.name = pr.name || "";
       }
       o.idle = Date.now() - p.updatedAt > 90000;
     }
@@ -250,11 +295,10 @@ const FIREBASE_CONFIG = {
   }
   function realCount() { let n = 0; for (const o of others.values()) if (!o.ghost) n++; return n; }
 
-  // ---------- Firebase real-time room ----------
-  const MY_PEER_ID = Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+  // ---------- Firebase ----------
+  const MY_PEER_ID = Math.random().toString(36).slice(2,9) + Date.now().toString(36);
   const ROOM = "soundroom-v1";
-  let db = null;
-  let pushTimer = null;
+  let db = null, pushTimer = null;
   const statusEl = document.getElementById("status");
 
   function pushPresence() {
@@ -262,124 +306,124 @@ const FIREBASE_CONFIG = {
     clearTimeout(pushTimer);
     pushTimer = setTimeout(() => {
       db.ref(`${ROOM}/peers/${MY_PEER_ID}`).set({
-        x: +me.x.toFixed(4),
-        y: +me.y.toFixed(4),
-        pulse: me.pulse,
+        x: +me.x.toFixed(4), y: +me.y.toFixed(4),
+        pulse: me.pulse, name: me.name || "",
         t: firebase.database.ServerValue.TIMESTAMP
-      }).catch(() => {});
-    }, 80); // throttle: ~12 updates/sec max
+      }).catch(()=>{});
+    }, 80);
   }
 
   function connect() {
     const cfg = FIREBASE_CONFIG;
-    const configured = cfg.apiKey && !cfg.apiKey.includes("XXXXXXXXX") && cfg.databaseURL && !cfg.databaseURL.includes("XXXXX");
-    if (!configured) {
-      statusEl.textContent = "local only — configure Firebase to play online";
-      return;
-    }
+    const ok = cfg.apiKey && !cfg.apiKey.includes("XXXXXXX") && cfg.databaseURL && !cfg.databaseURL.includes("XXXXX");
+    if (!ok) { statusEl.textContent = "local only — configure Firebase to play online"; return; }
     try {
       const app = firebase.initializeApp(cfg);
       db = firebase.database(app);
-
-      // Monitor real connection state
       db.ref(".info/connected").on("value", snap => {
         if (!snap.val()) statusEl.textContent = "reconnecting…";
       });
-
-      // Auto-remove this peer if the connection drops
       db.ref(`${ROOM}/peers/${MY_PEER_ID}`).onDisconnect().remove();
-
-      // Listen for all peers in the room
       db.ref(`${ROOM}/peers`).on("value", snap => {
         const data = snap.val() || {};
         const peers = Object.entries(data)
           .filter(([id]) => id !== MY_PEER_ID)
           .map(([peer, pr]) => ({
             peer,
-            presence: { x: pr.x, y: pr.y, pulse: pr.pulse },
+            presence: { x:pr.x, y:pr.y, pulse:pr.pulse, name:pr.name||"" },
             sameTab: false,
             updatedAt: pr.t || Date.now()
           }));
         syncPeers(peers);
         const n = peers.length;
-        statusEl.textContent = n === 0 ? "alone in the room" : `${n + 1} in the room`;
+        statusEl.textContent = n === 0 ? "alone in the room" : `${n+1} in the room`;
         statusEl.className = n > 0 ? "live" : "";
       }, err => {
         statusEl.textContent = "connection error — check Firebase config";
-        console.error("Firebase error:", err);
+        console.error("Firebase:", err);
       });
-
       pushPresence();
-    } catch (e) {
+    } catch(e) {
       db = null;
-      statusEl.textContent = "Firebase init failed — check config";
-      console.error("Firebase init:", e.message);
+      statusEl.textContent = "Firebase init failed";
+      console.error(e.message);
     }
   }
 
-  // Clean up presence when the page closes
   window.addEventListener("pagehide", () => {
-    if (db) db.ref(`${ROOM}/peers/${MY_PEER_ID}`).remove().catch(() => {});
+    if (db) db.ref(`${ROOM}/peers/${MY_PEER_ID}`).remove().catch(()=>{});
   });
 
   // ---------- Gestures ----------
   const stage = document.getElementById("stage");
   function moveTo(x, y) {
-    me.x = Math.max(0.01, Math.min(0.99, x)); me.y = Math.max(0.01, Math.min(0.99, y));
+    me.x = Math.max(0.01, Math.min(0.99, x));
+    me.y = Math.max(0.01, Math.min(0.99, y));
+    applyReverb();
     pushPresence();
   }
   function firePulse(o) {
-    ripples.push({ x: o.dx, y: o.dy, t: performance.now(), hue: o.hue, self: false });
+    ripples.push({ x:o.dx, y:o.dy, t:performance.now(), hue:o.hue, self:false });
     const l = listen(o);
-    bell(freqOf(bandOf(o.dy)), Math.max(0.05, l.gain * 1.6), l.pan);
+    bell(freqWithDetune(o.dy), Math.max(0.05, l.gain*1.6), l.pan);
   }
   function myPulse() {
     me.pulse++;
     pushPresence();
-    ripples.push({ x: me.x, y: me.y, t: performance.now(), hue: myHue, self: true });
-    bell(freqOf(bandOf(me.y)), 0.22, 0);
+    ripples.push({ x:me.x, y:me.y, t:performance.now(), hue:myHue, self:true });
+    bell(freqWithDetune(me.y), 0.22, 0);
   }
+
   let down = null;
   stage.addEventListener("pointerdown", e => {
     if (e.target.closest(".gate")) return;
     stage.setPointerCapture(e.pointerId);
     const r = stage.getBoundingClientRect();
-    down = { x: e.clientX, y: e.clientY, t: performance.now() };
-    moveTo((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    down = { x:e.clientX, y:e.clientY, t:performance.now() };
+    moveTo((e.clientX-r.left)/r.width, (e.clientY-r.top)/r.height);
   });
   stage.addEventListener("pointermove", e => {
     if (e.pointerType === "mouse" || down) {
       const r = stage.getBoundingClientRect();
-      moveTo((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+      moveTo((e.clientX-r.left)/r.width, (e.clientY-r.top)/r.height);
     }
   });
   stage.addEventListener("pointerup", e => {
-    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8 && performance.now() - down.t < 350) myPulse();
+    if (down && Math.hypot(e.clientX-down.x, e.clientY-down.y) < 8 && performance.now()-down.t < 350) myPulse();
     down = null;
   });
   stage.addEventListener("pointercancel", () => { down = null; });
   stage.addEventListener("keydown", e => {
     const s = 0.03;
-    if (e.key === "ArrowLeft") moveTo(me.x - s, me.y);
-    else if (e.key === "ArrowRight") moveTo(me.x + s, me.y);
-    else if (e.key === "ArrowUp") moveTo(me.x, me.y - 1 / BANDS);
-    else if (e.key === "ArrowDown") moveTo(me.x, me.y + 1 / BANDS);
+    if      (e.key === "ArrowLeft")  moveTo(me.x-s, me.y);
+    else if (e.key === "ArrowRight") moveTo(me.x+s, me.y);
+    else if (e.key === "ArrowUp")    moveTo(me.x, me.y-1/BANDS);
+    else if (e.key === "ArrowDown")  moveTo(me.x, me.y+1/BANDS);
     else if (e.key === " " || e.key === "Enter") myPulse();
     else return;
     e.preventDefault();
   });
 
+  // Enter on name field submits
+  document.getElementById("nameInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("enter").click(); }
+  });
+
   document.getElementById("enter").addEventListener("click", startAudio);
   function startAudio() {
+    me.name = (document.getElementById("nameInput").value || "").trim().slice(0, 10);
     if (!ctx) buildAudio();
     ctx.resume();
     audioOn = true; muted = false;
     master.gain.setTargetAtTime(vol(), ctx.currentTime, 0.1);
+    applyReverb();
     document.getElementById("gate").hidden = true;
     document.getElementById("mute").setAttribute("aria-pressed", "false");
     document.getElementById("mute").textContent = "Mute";
-    stage.focus({ preventScroll: true });
+    stage.focus({ preventScroll:true });
+    pushPresence();
   }
+
   document.getElementById("mute").addEventListener("click", () => {
     if (!audioOn) { startAudio(); return; }
     muted = !muted;
@@ -388,115 +432,164 @@ const FIREBASE_CONFIG = {
     b.setAttribute("aria-pressed", String(muted));
     b.textContent = muted ? "Unmute" : "Mute";
   });
-  document.getElementById("vol").addEventListener("input", () => { if (master && !muted) master.gain.setTargetAtTime(vol(), ctx.currentTime, 0.05); });
-  document.getElementById("pulse").addEventListener("click", () => { if (!audioOn) startAudio(); myPulse(); });
+  document.getElementById("vol").addEventListener("input", () => {
+    if (master && !muted) master.gain.setTargetAtTime(vol(), ctx.currentTime, 0.05);
+  });
+  document.getElementById("pulse").addEventListener("click", () => {
+    if (!audioOn) startAudio(); myPulse();
+  });
   document.getElementById("blind").addEventListener("click", e => {
     blind = !blind; e.currentTarget.setAttribute("aria-pressed", String(blind));
   });
-  document.getElementById("ghosts").addEventListener("click", () => { autoGhostDone = true; setGhosts(!ghostsOn); });
+  document.getElementById("ghost-count").addEventListener("input", e => {
+    autoGhostDone = true;
+    const n = parseInt(e.target.value);
+    document.getElementById("ghost-val").textContent = n;
+    setGhosts(n);
+  });
 
   // ---------- Drawing ----------
   const cv = document.getElementById("cv"), g = cv.getContext("2d");
   let W = 0, H = 0, dpr = 1, tok = {};
   function readTokens() {
     const cs = getComputedStyle(document.documentElement);
-    tok = { ink: cs.getPropertyValue("--ink").trim(), muted: cs.getPropertyValue("--muted").trim(), line: cs.getPropertyValue("--line").trim(), accent: cs.getPropertyValue("--accent").trim(), L: cs.getPropertyValue("--dot-l").trim() || "55%" };
+    tok = {
+      ink:    cs.getPropertyValue("--ink").trim(),
+      muted:  cs.getPropertyValue("--muted").trim(),
+      line:   cs.getPropertyValue("--line").trim(),
+      accent: cs.getPropertyValue("--accent").trim(),
+      L:      cs.getPropertyValue("--dot-l").trim() || "55%"
+    };
   }
   function resize() {
     const r = stage.getBoundingClientRect();
     dpr = Math.min(2, window.devicePixelRatio || 1);
     W = r.width; H = r.height;
-    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   new ResizeObserver(resize).observe(stage);
   readTokens(); setInterval(readTokens, 1000);
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", readTokens);
-  new MutationObserver(readTokens).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  new MutationObserver(readTokens).observe(document.documentElement, { attributes:true, attributeFilter:["data-theme"] });
 
-  const col = (h, a = 1) => `hsla(${h} 70% ${tok.L} / ${a})`;
+  const col = (h, a=1) => `hsla(${h} 70% ${tok.L} / ${a})`;
+  const LABEL_FONT = `400 11px "JetBrains Mono",ui-monospace,monospace`;
 
   function draw(now) {
     g.clearRect(0, 0, W, H);
+
+    // staff
     const myBand = bandOf(me.y);
     for (let b = 0; b < BANDS; b++) {
-      const y = (1 - (b + 0.5) / BANDS) * H;
+      const y = (1 - (b+0.5)/BANDS) * H;
       g.strokeStyle = b === myBand ? tok.accent : tok.line;
-      g.globalAlpha = b === myBand ? 0.6 : 0.55; g.lineWidth = b === myBand ? 1.5 : 1;
+      g.globalAlpha = b === myBand ? 0.6 : 0.55;
+      g.lineWidth   = b === myBand ? 1.5 : 1;
       g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke();
     }
     g.globalAlpha = 1;
 
-    for (let i = ripples.length - 1; i >= 0; i--) {
+    // ripples
+    for (let i = ripples.length-1; i >= 0; i--) {
       const r = ripples[i], age = (now - r.t) / 2200;
       if (age > 1) { ripples.splice(i, 1); continue; }
       if (blind && !r.self) continue;
-      const rad = 10 + age * Math.min(W, H) * 0.55;
+      const rad = 10 + age * Math.min(W,H) * 0.55;
       g.strokeStyle = r.self ? tok.accent : col(r.hue, 1);
-      g.globalAlpha = (1 - age) * 0.8; g.lineWidth = 2;
-      g.beginPath(); g.arc(r.x * W, r.y * H, rad, 0, Math.PI * 2); g.stroke();
-      if (!reduced) { g.globalAlpha = (1 - age) * 0.35; g.beginPath(); g.arc(r.x * W, r.y * H, rad * 0.6, 0, Math.PI * 2); g.stroke(); }
+      g.globalAlpha = (1-age)*0.8; g.lineWidth = 2;
+      g.beginPath(); g.arc(r.x*W, r.y*H, rad, 0, Math.PI*2); g.stroke();
+      if (!reduced) {
+        g.globalAlpha = (1-age)*0.35;
+        g.beginPath(); g.arc(r.x*W, r.y*H, rad*0.6, 0, Math.PI*2); g.stroke();
+      }
     }
     g.globalAlpha = 1;
 
     if (!blind) {
+      // listening links
       for (const o of others.values()) {
         const l = listen(o);
         if (l.d >= 0.45) continue;
         const cons = CONSONANT.has(Math.abs(semis(bandOf(o.dy)) - semis(myBand)) % 12);
         g.strokeStyle = cons ? tok.accent : tok.muted;
-        g.globalAlpha = (1 - l.d / 0.45) * 0.9; g.lineWidth = 1;
-        g.setLineDash(cons ? [] : [3, 4]);
-        g.beginPath(); g.moveTo(me.x * W, me.y * H); g.lineTo(o.dx * W, o.dy * H); g.stroke();
+        g.globalAlpha = (1 - l.d/0.45)*0.9; g.lineWidth = 1;
+        g.setLineDash(cons ? [] : [3,4]);
+        g.beginPath(); g.moveTo(me.x*W, me.y*H); g.lineTo(o.dx*W, o.dy*H); g.stroke();
         g.setLineDash([]);
       }
       g.globalAlpha = 1;
 
+      // other presences
       for (const o of others.values()) {
-        const l = listen(o), x = o.dx * W, y = o.dy * H;
-        const breath = reduced ? 0 : Math.sin(now / 900 + o.hue) * 2;
+        const l = listen(o), x = o.dx*W, y = o.dy*H;
+        const breath = reduced ? 0 : Math.sin(now/900+o.hue)*2;
         g.globalAlpha = o.idle ? 0.4 : 1;
         g.fillStyle = col(o.hue, 0.18);
-        g.beginPath(); g.arc(x, y, 18 + breath + l.gain * 40, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(x, y, 18+breath+l.gain*40, 0, Math.PI*2); g.fill();
         g.fillStyle = col(o.hue, 1);
-        g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(x, y, 6, 0, Math.PI*2); g.fill();
         if (o.ghost) {
-          g.strokeStyle = col(o.hue, 1); g.setLineDash([2, 3]); g.lineWidth = 1;
-          g.beginPath(); g.arc(x, y, 11, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+          g.strokeStyle = col(o.hue, 1); g.setLineDash([2,3]); g.lineWidth = 1;
+          g.beginPath(); g.arc(x, y, 11, 0, Math.PI*2); g.stroke(); g.setLineDash([]);
+        }
+        if (o.name) {
+          g.globalAlpha = o.idle ? 0.4 : 0.85;
+          g.font = LABEL_FONT;
+          g.fillStyle = col(o.hue, 1);
+          g.fillText(o.name, x+10, y-10);
         }
       }
       g.globalAlpha = 1;
     }
 
-    const mx = me.x * W, my = me.y * H, br = reduced ? 0 : Math.sin(now / 700) * 2;
+    // me
+    const mx = me.x*W, my = me.y*H, br = reduced ? 0 : Math.sin(now/700)*2;
     g.strokeStyle = tok.accent; g.lineWidth = 1.5;
-    g.beginPath(); g.arc(mx, my, 16 + br, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.arc(mx, my, 16+br, 0, Math.PI*2); g.stroke();
     g.fillStyle = tok.accent;
-    g.beginPath(); g.arc(mx, my, 6, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(mx, my, 6, 0, Math.PI*2); g.fill();
+    if (me.name) {
+      g.font = LABEL_FONT;
+      g.fillStyle = tok.accent;
+      g.globalAlpha = 0.9;
+      g.fillText(me.name, mx+10, my-10);
+      g.globalAlpha = 1;
+    }
   }
 
   // ---------- Loop ----------
   function frame(now) {
     if (ghostsOn) moveGhosts(now);
+
     for (const o of others.values()) {
-      o.dx += (o.x - o.dx) * 0.18; o.dy += (o.y - o.dy) * 0.18;
-      if (o.ghost && o.lastPulse !== o.pulse) { if (o.lastPulse !== undefined) firePulse(o); o.lastPulse = o.pulse; }
+      o.dx += (o.x-o.dx)*0.18; o.dy += (o.y-o.dy)*0.18;
+      if (o.ghost && o.lastPulse !== o.pulse) {
+        if (o.lastPulse !== undefined) firePulse(o);
+        o.lastPulse = o.pulse;
+      }
     }
 
     if (audioOn) {
-      if (!selfVoice) selfVoice = makeVoice(freqOf(bandOf(me.y)), true);
-      selfVoice.set(freqOf(bandOf(me.y)), 0.07, (me.x - 0.5) * 0.4, 1600);
+      if (!selfVoice) selfVoice = makeVoice(freqWithDetune(me.y), true);
+      selfVoice.set(freqWithDetune(me.y), 0.07, (me.x-0.5)*0.4, 1600);
       for (const o of others.values()) {
-        if (!o.voice) o.voice = makeVoice(freqOf(bandOf(o.dy)), false);
+        if (!o.voice) o.voice = makeVoice(freqWithDetune(o.dy), false);
         const l = listen(o);
-        o.voice.set(freqOf(bandOf(o.dy)), l.gain, l.pan, l.cut);
+        o.voice.set(freqWithDetune(o.dy), l.gain, l.pan, l.cut);
       }
     }
 
     draw(now);
 
     if (realCount() > 0) loneSince = now;
-    if (!autoGhostDone && !ghostsOn && now - loneSince > 5000) { autoGhostDone = true; setGhosts(true); }
+    if (!autoGhostDone && !ghostsOn && now - loneSince > 5000) {
+      autoGhostDone = true;
+      const slider = document.getElementById("ghost-count");
+      slider.value = 3;
+      document.getElementById("ghost-val").textContent = 3;
+      setGhosts(3);
+    }
 
     requestAnimationFrame(frame);
   }
