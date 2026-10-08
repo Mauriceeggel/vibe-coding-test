@@ -281,6 +281,11 @@ const FIREBASE_CONFIG = {
       const app = firebase.initializeApp(cfg);
       db = firebase.database(app);
 
+      // Monitor real connection state
+      db.ref(".info/connected").on("value", snap => {
+        if (!snap.val()) statusEl.textContent = "reconnecting…";
+      });
+
       // Auto-remove this peer if the connection drops
       db.ref(`${ROOM}/peers/${MY_PEER_ID}`).onDisconnect().remove();
 
